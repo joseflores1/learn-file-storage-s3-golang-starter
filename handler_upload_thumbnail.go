@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -55,38 +55,26 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	videoData, err := cfg.db.GetVideo(videoID)
+	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
 	}
 
-	if userID != videoData.CreateVideoParams.UserID {
+	if userID != video.UserID {
 		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
 		return
 	}
 
-	tn := thumbnail{
-		data: imageData,
-		mediaType: contentType,
-	}
-	videoThumbnails[videoID] = tn
+	encodedData := base64.StdEncoding.EncodeToString(imageData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", contentType, encodedData)
+	video.ThumbnailURL = &dataURL
 
-	newTnURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoData.ID)
-	newVideo := database.Video{
-		ID: videoData.ID,
-		CreatedAt: videoData.CreatedAt,
-		UpdatedAt: videoData.UpdatedAt,
-		ThumbnailURL: &newTnURL,
-		VideoURL: videoData.VideoURL,
-		CreateVideoParams: videoData.CreateVideoParams,
-	}
-	err = cfg.db.UpdateVideo(newVideo)
+	err = cfg.db.UpdateVideo(video)
 	if err != nil {
-		delete(videoThumbnails, videoID)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, newVideo) 
+	respondWithJSON(w, http.StatusOK, video) 
 
 }
