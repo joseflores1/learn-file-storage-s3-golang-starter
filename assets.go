@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,4 +38,17 @@ func (cfg apiConfig) getAssetDiskPath(assetPath string) string {
 
 func (cfg apiConfig) getAssetURL(assetDiskPath string) string {
 	return fmt.Sprintf("http://localhost:%s/%s", cfg.port, assetDiskPath)
+}
+
+func checkAssetMediaType(mediaType string, allowedTypes map[string]struct{}) error {
+	mimeType, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := allowedTypes[mimeType]; !ok {
+		return errors.New("mime type not allowed")
+	}
+
+	return nil
 }

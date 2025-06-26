@@ -48,6 +48,27 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	allowedTypes := map[string]struct{}{
+		"image/jpeg": {},
+		"image/png":  {},
+	}
+
+	err = checkAssetMediaType(contentType, allowedTypes)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid MIME type in Content-Header", err)
+		return
+	}
+
+	video, err := cfg.db.GetVideo(videoID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
+	}
+
+	if userID != video.UserID {
+		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
+		return
+	}
+
 	assetPath := getAssetPath(videoID, contentType)
 	assetDiskPath := cfg.getAssetDiskPath(assetPath)
 
@@ -61,16 +82,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	_, err = io.Copy(newFile, file)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't save file", err)
-		return
-	}
-
-	video, err := cfg.db.GetVideo(videoID)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
-	}
-
-	if userID != video.UserID {
-		respondWithError(w, http.StatusUnauthorized, "Not authorized to update this video", nil)
 		return
 	}
 
