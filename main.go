@@ -23,8 +23,6 @@ type apiConfig struct {
 	port             string
 }
 
-
-
 func main() {
 	godotenv.Load(".env")
 
