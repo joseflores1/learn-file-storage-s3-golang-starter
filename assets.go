@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"mime"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -60,6 +64,72 @@ func checkAssetMediaType(mediaType string, allowedTypes map[string]struct{}) err
 	return nil
 }
 
-func (cfg apiConfig) generateS3Path(key string) string{
+func (cfg apiConfig) generateS3Path(key string) string {
 	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	const cmdName = "ffprobe"
+	args := []string{"-v", "error", "-print_format", "json", "-show_streams", filePath}
+	cmd := exec.Command(cmdName, args...)
+
+	var b bytes.Buffer
+	cmd.Stdout = &b
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("ffprobe error: %v", err)
+	}
+
+	data := b.Bytes()
+
+	var dimStruct struct {
+		Streams []struct {
+			Width  int `json:"width,omitempty"`
+			Height int `json:"height,omitempty"`
+		} `json:"streams"`
+	}
+
+	err = json.Unmarshal(data, &dimStruct)
+	if err != nil {
+		return "", fmt.Errorf("could not parse ffprobe output: %v", err)
+	}
+
+	if len(dimStruct.Streams) == 0 {
+		return "", errors.New("no video streams found")
+	}
+	const epsilon = 1e-2
+	const landscape = float64(16) / 9
+	const portrait = float64(9) / 16
+
+	ratio := float64(dimStruct.Streams[0].Width) / float64(dimStruct.Streams[0].Height)
+	if withinTolerance(ratio, landscape, epsilon) {
+		return "16:9", nil
+	}
+	if withinTolerance(ratio, portrait, epsilon) {
+		return "9:16", nil
+	}
+	return "other", nil
+}
+
+func nameAspectRatio(ratio string) string {
+	nameMap := map[string]string{
+		"16:9":  "landscape/",
+		"9:16":  "portrait/",
+		"other": "other/",
+	}
+	return nameMap[ratio]
+}
+
+func withinTolerance(a, b, e float64) bool {
+	if a == b {
+		return true
+	}
+
+	d := math.Abs(a - b)
+
+	if b == 0 {
+		return d < e
+	}
+
+	return (d / math.Abs(b)) < e
 }

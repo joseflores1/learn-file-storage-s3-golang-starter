@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -15,7 +14,7 @@ import (
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 
 	const maxMemory = 1 << 30
-	r.Body = http.MaxBytesReader(w, r.Body, maxMemory) 
+	r.Body = http.MaxBytesReader(w, r.Body, maxMemory)
 	if err, ok := r.Body.(error); ok {
 		respondWithError(w, http.StatusBadRequest, "Video is too big", err)
 		return
@@ -41,11 +40,10 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fmt.Println("uploading thumbnail for video", videoID, "by user", userID)
-
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't find video", err)
+		return
 	}
 
 	if userID != video.UserID {
@@ -96,11 +94,19 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	ratio, err := getVideoAspectRatio(tmpFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get video ratio", err)
+	}
+
+	prefix := nameAspectRatio(ratio)
 	key := getAssetPath(contentType)
+	prefixKey := prefix + key
+
 	objInput := &s3.PutObjectInput{
-		Bucket: aws.String(cfg.s3Bucket),
-		Key: aws.String(key),
-		Body: tmpFile,
+		Bucket:      aws.String(cfg.s3Bucket),
+		Key:         aws.String(prefixKey),
+		Body:        tmpFile,
 		ContentType: aws.String(contentType),
 	}
 
@@ -110,7 +116,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s3Path := cfg.generateS3Path(key)
+	s3Path := cfg.generateS3Path(prefixKey)
 	video.VideoURL = &s3Path
 
 	err = cfg.db.UpdateVideo(video)
