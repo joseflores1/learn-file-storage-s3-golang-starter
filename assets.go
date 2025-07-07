@@ -59,3 +59,7 @@ func checkAssetMediaType(mediaType string, allowedTypes map[string]struct{}) err
 
 	return nil
 }
+
+func (cfg apiConfig) generateS3Path(key string) string{
+	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, key)
+}
