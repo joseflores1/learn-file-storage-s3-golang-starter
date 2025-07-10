@@ -133,3 +133,28 @@ func withinTolerance(a, b, e float64) bool {
 
 	return (d / math.Abs(b)) < e
 }
+
+func processVideoForFastStart(filePath string) (string, error) {
+	outputPath := filePath + ".processing"
+
+	const cmdName = "ffmpeg"
+	args := []string{"-i", filePath , "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputPath}
+	cmd := exec.Command(cmdName, args...)
+
+	var b bytes.Buffer
+	cmd.Stderr = &b
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("ffmpeg error: %s, %v", b.String(), err)
+	}
+
+	fileInfo, err := os.Stat(outputPath)
+	if err != nil {
+		return "", fmt.Errorf("could'nt stat processed file: %v", err)
+	}
+
+	if fileInfo.Size() == 0 {
+		return "", fmt.Errorf("processed file is empty")
+	}
+	return outputPath, nil
+}
