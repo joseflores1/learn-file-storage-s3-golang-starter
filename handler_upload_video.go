@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -131,12 +132,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s3Path := cfg.generateS3Path(prefixKey)
-	video.VideoURL = &s3Path
+	//s3Path := cfg.generateS3Path(prefixKey)
+	
+	url := fmt.Sprintf("%s,%s", cfg.s3Bucket, prefixKey)
+	video.VideoURL = &url
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
+		return
+	}
+
+	video, err = cfg.dbVideoToSignedVideo(video)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't upload signed video", err)
 		return
 	}
 
